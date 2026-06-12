@@ -1,10 +1,15 @@
 import os
 import logging
+import uvicorn
 from mcp.server.fastmcp import FastMCP
+from starlette.applications import Starlette
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
+from starlette.responses import JSONResponse
+from starlette.routing import Route, Mount
 from ebayAPItool import get_access_token, make_ebay_api_request
 
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("mcp-ebay-server")
 
 mcp = FastMCP(
     "mcp-ebay-server",
@@ -39,5 +44,61 @@ def list_auction(query: str, amount: int = 10) -> str:
     return "\n\n".join(lines) if lines else "No auctions found."
 
 
+class BearerAuthMiddleware(BaseHTTPMiddleware):
+    UNPROTECTED = {"/token", "/.well-known/oauth-authorization-server"}
+
+    async def dispatch(self, request: Request, call_next):
+        if request.url.path in self.UNPROTECTED:
+            return await call_next(request)
+        auth_token = os.environ.get("MCP_AUTH_TOKEN", "")
+        if not auth_token:
+            return await call_next(request)
+        auth_header = request.headers.get("Authorization", "")
+        if not auth_header.startswith("Bearer ") or auth_header[7:] != auth_token:
+            return JSONResponse({"error": "Unauthorized"}, status_code=401)
+        return await call_next(request)
+
+
+async def oauth_metadata(request: Request):
+    base = str(request.base_url).rstrip("/")
+    return JSONResponse({
+        "issuer": base,
+        "token_endpoint": f"{base}/token",
+        "grant_types_supported": ["client_credentials"],
+        "token_endpoint_auth_methods_supported": ["client_secret_post"],
+    })
+
+
+async def token_endpoint(request: Request):
+    form = await request.form()
+    grant_type = form.get("grant_type")
+    client_id = form.get("client_id", "")
+    client_secret = form.get("client_secret", "")
+
+    expected_id = os.environ.get("MCP_CLIENT_ID", "ebay-mcp")
+    expected_secret = os.environ.get("MCP_AUTH_TOKEN", "")
+
+    if not expected_secret:
+        return JSONResponse({"error": "server_not_configured"}, status_code=500)
+
+    if grant_type == "client_credentials" and client_id == expected_id and client_secret == expected_secret:
+        return JSONResponse({
+            "access_token": expected_secret,
+            "token_type": "bearer",
+            "expires_in": 3600,
+        })
+    return JSONResponse({"error": "invalid_client"}, status_code=401)
+
+
 if __name__ == "__main__":
-    mcp.run(transport="streamable-http")
+    fastmcp_app = mcp.streamable_http_app()
+
+    app = Starlette(routes=[
+        Route("/.well-known/oauth-authorization-server", oauth_metadata),
+        Route("/token", token_endpoint, methods=["POST"]),
+        Mount("/", fastmcp_app),
+    ])
+    app.add_middleware(BearerAuthMiddleware)
+
+    port = int(os.environ.get("PORT", "8000"))
+    uvicorn.run(app, host="0.0.0.0", port=port)
