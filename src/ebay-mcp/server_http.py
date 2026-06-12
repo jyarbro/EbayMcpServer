@@ -38,5 +38,6 @@ def list_auction(query: str, amount: int = 10) -> str:
 
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", "8000"))
-    mcp.run(transport="streamable-http", host="0.0.0.0", port=port, path="/mcp")
+    os.environ.setdefault("HOST", "0.0.0.0")
+    os.environ.setdefault("PORT", "8000")
+    mcp.run(transport="streamable-http")
