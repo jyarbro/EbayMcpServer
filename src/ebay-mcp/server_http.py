@@ -46,7 +46,14 @@ def list_auction(query: str, amount: int = 10) -> str:
 # In-memory store for pending auth codes: {code: {code_challenge, redirect_uri, client_id}}
 _auth_codes: dict = {}
 
-UNPROTECTED_PATHS = {"/token", "/authorize", "/.well-known/oauth-authorization-server"}
+UNPROTECTED_PATHS = {
+    "/token",
+    "/authorize",
+    "/.well-known/oauth-authorization-server",
+    "/.well-known/oauth-protected-resource",
+    "/.well-known/oauth-protected-resource/mcp",
+    "/favicon.ico",
+}
 
 
 class BearerAuthMiddleware(BaseHTTPMiddleware):
@@ -72,6 +79,15 @@ async def oauth_metadata(request: Request):
         "code_challenge_methods_supported": ["S256"],
         "token_endpoint_auth_methods_supported": ["client_secret_post", "none"],
         "response_types_supported": ["code"],
+    })
+
+
+async def protected_resource_metadata(request: Request):
+    base = str(request.base_url).rstrip("/")
+    return JSONResponse({
+        "resource": base,
+        "authorization_servers": [base],
+        "bearer_methods_supported": ["header"],
     })
 
 
@@ -115,6 +131,9 @@ a:hover{{background:#0051cc}}</style></head>
 
 
 async def token_endpoint(request: Request):
+    if request.method == "GET":
+        base = str(request.base_url).rstrip("/")
+        return JSONResponse({"token_endpoint": f"{base}/token", "grant_types_supported": ["authorization_code", "client_credentials"]})
     form = await request.form()
     grant_type = form.get("grant_type", "")
     auth_token = os.environ.get("MCP_AUTH_TOKEN", "")
@@ -166,8 +185,10 @@ if __name__ == "__main__":
 
     app = Starlette(routes=[
         Route("/.well-known/oauth-authorization-server", oauth_metadata),
+        Route("/.well-known/oauth-protected-resource", protected_resource_metadata),
+        Route("/.well-known/oauth-protected-resource/mcp", protected_resource_metadata),
         Route("/authorize", authorize_endpoint),
-        Route("/token", token_endpoint, methods=["POST"]),
+        Route("/token", token_endpoint, methods=["GET", "POST"]),
         Mount("/", fastmcp_app),
     ])
     app.add_middleware(BearerAuthMiddleware)
