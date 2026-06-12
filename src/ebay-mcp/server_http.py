@@ -96,7 +96,22 @@ async def authorize_endpoint(request: Request):
     }
 
     sep = "&" if "?" in redirect_uri else "?"
-    return RedirectResponse(f"{redirect_uri}{sep}code={code}&state={state}", status_code=302)
+    callback_url = f"{redirect_uri}{sep}code={code}&state={state}"
+    html = f"""<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>eBay MCP – Authorize</title>
+<style>body{{font-family:sans-serif;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;background:#f5f5f5}}
+.card{{background:#fff;padding:2rem 3rem;border-radius:12px;box-shadow:0 2px 12px rgba(0,0,0,.1);text-align:center}}
+h2{{margin-bottom:.5rem}}p{{color:#666;margin-bottom:1.5rem}}
+a{{display:inline-block;background:#0070f3;color:#fff;padding:.75rem 2rem;border-radius:8px;text-decoration:none;font-weight:600}}
+a:hover{{background:#0051cc}}</style></head>
+<body><div class="card">
+<h2>eBay Auction Search</h2>
+<p>Allow Claude.ai to access your eBay MCP server?</p>
+<a href="{callback_url}">Allow Access</a>
+</div></body></html>"""
+    from starlette.responses import HTMLResponse
+    return HTMLResponse(html)
 
 
 async def token_endpoint(request: Request):
