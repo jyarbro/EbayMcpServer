@@ -9,6 +9,8 @@ logger = logging.getLogger("mcp-ebay-server")
 mcp = FastMCP(
     "mcp-ebay-server",
     instructions="Search eBay for live auction listings. Use list-auction to find items currently up for bid.",
+    host="0.0.0.0",
+    port=int(os.environ.get("PORT", "8000")),
 )
 
 
@@ -38,6 +40,4 @@ def list_auction(query: str, amount: int = 10) -> str:
 
 
 if __name__ == "__main__":
-    os.environ.setdefault("HOST", "0.0.0.0")
-    os.environ.setdefault("PORT", "8000")
     mcp.run(transport="streamable-http")
