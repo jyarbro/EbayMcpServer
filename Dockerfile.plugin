@@ -5,8 +5,7 @@ WORKDIR /app/src/ebay-mcp
 ENV UV_COMPILE_BYTECODE=1
 
 COPY pyproject.toml /app/
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv pip install --system "mcp[cli]" requests pydantic starlette uvicorn httpx
+RUN uv pip install --system "mcp[cli]" requests pydantic starlette uvicorn httpx
 
 ADD src /app/src
 
