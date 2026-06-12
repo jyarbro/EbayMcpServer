@@ -6,9 +6,10 @@ Forked from [CooKey-Monster/EbayMcpServer](https://github.com/CooKey-Monster/Eba
 
 ## What it does
 
-Adds a `list_auction` tool to Claude.ai. You can ask things like:
+Adds two tools to Claude.ai for researching eBay auctions:
 
 > "Find me 10 auctions for vintage cameras"
+> "Get the details on that first listing"
 
 ## Deployment (Railway)
 
@@ -41,8 +42,11 @@ Railway automatically sets `PORT` and `RAILWAY_PUBLIC_DOMAIN`.
    - **Client ID**: the value you set for `MCP_CLIENT_ID`
 3. Click **Connect** and approve access on the authorization page that appears
 
-## Tool
+## Tools
 
 | Tool | Arguments | Description |
 |------|-----------|-------------|
-| `list_auction` | `query` (string), `amount` (int, default 10) | Search eBay auctions by keyword |
+| `list_auction` | `query` (string), `amount` (int, default 10) | Search eBay auctions by keyword. Returns title, current bid, end time, item ID, and URL for each result. |
+| `get_auction_detail` | `item_id` (string) | Fetch full details for a single listing using the item ID from `list_auction`. Returns title, condition, current bid, bid count, seller feedback score and positive %, return policy, all shipping options with estimated delivery, item specifics (model, storage, etc.), full description, and all listing photos. |
+
+> **Note:** Watcher count is not available — eBay restricts that to seller-authenticated APIs only.
