@@ -1,18 +1,17 @@
 FROM ghcr.io/astral-sh/uv:python3.11-bookworm-slim
 
-WORKDIR /app
+WORKDIR /app/src/ebay-mcp
 
 ENV UV_COMPILE_BYTECODE=1
 
-COPY pyproject.toml uv.lock* /app/
+COPY pyproject.toml /app/
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv pip install --system mcp[cli] requests pydantic starlette uvicorn
+    uv pip install --system "mcp[cli]" requests pydantic starlette uvicorn httpx
 
 ADD src /app/src
 
-ENV PORT=8000
 ENV EBAY_SANDBOX=false
 
 EXPOSE 8000
 
-CMD ["python", "src/ebay-mcp/server_http.py"]
+CMD ["python", "server_http.py"]
