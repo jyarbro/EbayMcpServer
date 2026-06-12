@@ -191,16 +191,26 @@ async def token_endpoint(request: Request):
 
 
 if __name__ == "__main__":
+    from contextlib import asynccontextmanager
+
     fastmcp_app = mcp.streamable_http_app()
 
-    app = Starlette(routes=[
-        Route("/.well-known/oauth-authorization-server", oauth_metadata),
-        Route("/.well-known/oauth-protected-resource", protected_resource_metadata),
-        Route("/.well-known/oauth-protected-resource/mcp", protected_resource_metadata),
-        Route("/authorize", authorize_endpoint),
-        Route("/token", token_endpoint, methods=["GET", "POST"]),
-        Mount("/", fastmcp_app),
-    ])
+    @asynccontextmanager
+    async def lifespan(app):
+        async with fastmcp_app.router.lifespan_context(fastmcp_app):
+            yield
+
+    app = Starlette(
+        routes=[
+            Route("/.well-known/oauth-authorization-server", oauth_metadata),
+            Route("/.well-known/oauth-protected-resource", protected_resource_metadata),
+            Route("/.well-known/oauth-protected-resource/mcp", protected_resource_metadata),
+            Route("/authorize", authorize_endpoint),
+            Route("/token", token_endpoint, methods=["GET", "POST"]),
+            Mount("/", fastmcp_app),
+        ],
+        lifespan=lifespan,
+    )
     app.add_middleware(BearerAuthMiddleware)
 
     port = int(os.environ.get("PORT", "8000"))
