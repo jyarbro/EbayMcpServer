@@ -10,7 +10,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, RedirectResponse
 from starlette.routing import Route, Mount
-from ebayAPItool import get_access_token, make_ebay_api_request
+from ebayAPItool import get_access_token, make_ebay_api_request, get_item_detail
 
 logging.basicConfig(level=logging.INFO)
 
@@ -41,6 +41,56 @@ def list_auction(query: str, amount: int = 10) -> str:
         price_str = f"{currency} {price}" if price else "No bids yet"
         lines.append(f"- {title}\n  Bid: {price_str} | Ends: {end_date}\n  {url}")
     return "\n\n".join(lines) if lines else "No auctions found."
+
+
+@mcp.tool()
+def get_auction_detail(item_id: str) -> str:
+    """Fetch full details for a single eBay listing by item ID.
+
+    Args:
+        item_id: The eBay item ID (found at the end of the listing URL, e.g. '387234567890').
+    """
+    client_id = os.environ["EBAY_CLIENT_ID"]
+    client_secret = os.environ["EBAY_CLIENT_SECRET"]
+    access_token = get_access_token(client_id, client_secret)
+    data = get_item_detail(access_token, item_id)
+
+    if "error" in data:
+        return f"Error fetching item: {data['error']}"
+
+    lines = []
+    lines.append(f"Title: {data.get('title', 'N/A')}")
+    lines.append(f"Condition: {data.get('condition', 'N/A')}")
+
+    bid = data.get("currentBidPrice", {})
+    if bid:
+        lines.append(f"Current bid: {bid.get('currency', '')} {bid.get('value', 'N/A')}")
+
+    buy_now = data.get("buyItNowPrice", {})
+    if buy_now:
+        lines.append(f"Buy It Now: {buy_now.get('currency', '')} {buy_now.get('value', '')}")
+
+    lines.append(f"Ends: {data.get('itemEndDate', 'N/A')}")
+    lines.append(f"Seller: {data.get('seller', {}).get('username', 'N/A')}")
+    lines.append(f"Location: {data.get('itemLocation', {}).get('city', '')} {data.get('itemLocation', {}).get('country', '')}")
+
+    shipping_options = data.get("shippingOptions", [])
+    if shipping_options:
+        s = shipping_options[0]
+        cost = s.get("shippingCost", {})
+        cost_str = f"{cost.get('currency', '')} {cost.get('value', 'free')}" if cost else "free"
+        lines.append(f"Shipping: {s.get('shippingServiceCode', '')} — {cost_str}")
+
+    desc = data.get("description", "")
+    if desc:
+        lines.append(f"\nDescription:\n{desc[:2000]}{'...' if len(desc) > 2000 else ''}")
+
+    image = data.get("image", {}).get("imageUrl", "")
+    if image:
+        lines.append(f"\nImage: {image}")
+
+    lines.append(f"\nURL: {data.get('itemWebUrl', 'N/A')}")
+    return "\n".join(lines)
 
 
 # In-memory store for pending auth codes: {code: {code_challenge, redirect_uri, client_id}}

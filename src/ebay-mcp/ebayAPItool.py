@@ -96,3 +96,14 @@ def make_ebay_api_request(access_token, query=str, ammount=int):
         return ebay_search_results
     else:
         print(f"Error: {response.status_code} - {response.text}")
+
+
+def get_item_detail(access_token, item_id):
+    sandbox = os.environ.get("EBAY_SANDBOX", "false").lower() == "true"
+    base = "api.sandbox.ebay.com" if sandbox else "api.ebay.com"
+    url = f"https://{base}/buy/browse/v1/item/{requests.utils.quote(item_id, safe='')}"
+    headers = {"Authorization": f"Bearer {access_token}"}
+    response = requests.get(url, headers=headers)
+    if response.status_code == 200:
+        return response.json()
+    return {"error": f"{response.status_code} {response.text}"}
