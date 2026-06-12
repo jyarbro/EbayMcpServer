@@ -60,34 +60,65 @@ def get_auction_detail(item_id: str) -> str:
 
     lines = []
     lines.append(f"Title: {data.get('title', 'N/A')}")
-    lines.append(f"Condition: {data.get('condition', 'N/A')}")
+    lines.append(f"Condition: {data.get('condition', 'N/A')} {data.get('conditionDescription', '')}")
 
     bid = data.get("currentBidPrice", {})
     if bid:
         lines.append(f"Current bid: {bid.get('currency', '')} {bid.get('value', 'N/A')}")
+    bid_count = data.get("bidCount")
+    if bid_count is not None:
+        lines.append(f"Bid count: {bid_count}")
 
     buy_now = data.get("buyItNowPrice", {})
     if buy_now:
         lines.append(f"Buy It Now: {buy_now.get('currency', '')} {buy_now.get('value', '')}")
 
     lines.append(f"Ends: {data.get('itemEndDate', 'N/A')}")
-    lines.append(f"Seller: {data.get('seller', {}).get('username', 'N/A')}")
+
+    seller = data.get("seller", {})
+    feedback_score = seller.get("feedbackScore", "N/A")
+    feedback_pct = seller.get("feedbackPercentage", "N/A")
+    lines.append(f"Seller: {seller.get('username', 'N/A')} — feedback: {feedback_score} ({feedback_pct}% positive)")
+
     lines.append(f"Location: {data.get('itemLocation', {}).get('city', '')} {data.get('itemLocation', {}).get('country', '')}")
 
     shipping_options = data.get("shippingOptions", [])
-    if shipping_options:
-        s = shipping_options[0]
+    for s in shipping_options:
         cost = s.get("shippingCost", {})
-        cost_str = f"{cost.get('currency', '')} {cost.get('value', 'free')}" if cost else "free"
-        lines.append(f"Shipping: {s.get('shippingServiceCode', '')} — {cost_str}")
+        cost_str = f"{cost.get('currency', '')} {cost.get('value', '')}" if cost.get("value") else "Free"
+        eta = s.get("maxEstimatedDeliveryDate", "")
+        eta_str = f" | Est. delivery by {eta}" if eta else ""
+        lines.append(f"Shipping: {s.get('shippingServiceCode', '')} — {cost_str}{eta_str}")
+
+    returns = data.get("returnTerms", {})
+    if returns:
+        accepted = returns.get("returnsAccepted", False)
+        if accepted:
+            window = returns.get("returnPeriod", {}).get("value", "")
+            unit = returns.get("returnPeriod", {}).get("unit", "")
+            who_pays = returns.get("refundMethod", "")
+            lines.append(f"Returns: accepted, {window} {unit}, {who_pays}")
+        else:
+            lines.append("Returns: not accepted")
+
+    specifics = data.get("localizedAspects", [])
+    if specifics:
+        lines.append("\nItem specifics:")
+        for s in specifics:
+            lines.append(f"  {s.get('name')}: {s.get('value')}")
 
     desc = data.get("description", "")
     if desc:
         lines.append(f"\nDescription:\n{desc[:2000]}{'...' if len(desc) > 2000 else ''}")
 
-    image = data.get("image", {}).get("imageUrl", "")
-    if image:
-        lines.append(f"\nImage: {image}")
+    images = [data.get("image", {}).get("imageUrl", "")] + [
+        img.get("imageUrl", "") for img in data.get("additionalImages", [])
+    ]
+    images = [i for i in images if i]
+    if images:
+        lines.append(f"\nImages ({len(images)}):")
+        for img in images:
+            lines.append(f"  {img}")
 
     lines.append(f"\nURL: {data.get('itemWebUrl', 'N/A')}")
     return "\n".join(lines)
