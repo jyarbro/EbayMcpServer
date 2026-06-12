@@ -1,0 +1,16 @@
+{
+  "name": "eBay Auction Search",
+  "description": "Search eBay for live auction listings by keyword. Returns current bid price, end time, and direct links.",
+  "version": "0.1.0",
+  "type": "mcp",
+  "server": {
+    "url": "https://YOUR_DEPLOYED_HOST/mcp",
+    "transport": "streamable-http"
+  },
+  "tools": [
+    {
+      "name": "list_auction",
+      "description": "Search eBay for auction listings matching a keyword query."
+    }
+  ]
+}
