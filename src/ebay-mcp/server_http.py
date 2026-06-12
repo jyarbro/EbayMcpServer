@@ -101,8 +101,45 @@ async def protected_resource_metadata(request: Request):
     })
 
 
+def _authorize_page(params: dict, error: str = ""):
+    from starlette.responses import HTMLResponse
+    import html as html_mod
+    hidden = "\n".join(
+        f'<input type="hidden" name="{html_mod.escape(k, quote=True)}" value="{html_mod.escape(v, quote=True)}">'
+        for k, v in params.items()
+    )
+    error_html = f'<p class="err">{html_mod.escape(error)}</p>' if error else ""
+    html = f"""<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>eBay MCP – Authorize</title>
+<style>body{{font-family:sans-serif;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;background:#f5f5f5}}
+.card{{background:#fff;padding:2rem 3rem;border-radius:12px;box-shadow:0 2px 12px rgba(0,0,0,.1);text-align:center}}
+h2{{margin-bottom:.5rem}}p{{color:#666;margin-bottom:1.5rem}}
+.err{{color:#c00;font-weight:600}}
+input[type=password]{{padding:.6rem;border:1px solid #ccc;border-radius:8px;width:100%;margin-bottom:1rem;box-sizing:border-box}}
+button{{display:inline-block;background:#0070f3;color:#fff;padding:.75rem 2rem;border-radius:8px;border:none;font-weight:600;font-size:1rem;cursor:pointer}}
+button:hover{{background:#0051cc}}</style></head>
+<body><div class="card">
+<h2>eBay Auction Search</h2>
+<p>Enter the passphrase to allow Claude.ai access.</p>
+{error_html}
+<form method="post" action="/authorize">
+{hidden}
+<input type="password" name="passphrase" placeholder="Passphrase" autofocus>
+<button type="submit">Allow Access</button>
+</form>
+</div></body></html>"""
+    return HTMLResponse(html, status_code=401 if error else 200)
+
+
 async def authorize_endpoint(request: Request):
-    params = dict(request.query_params)
+    if request.method == "POST":
+        form = await request.form()
+        params = {k: str(v) for k, v in form.items()}
+    else:
+        params = dict(request.query_params)
+    passphrase = params.pop("passphrase", "")
+
     client_id = params.get("client_id", "")
     redirect_uri = params.get("redirect_uri", "")
     state = params.get("state", "")
@@ -112,6 +149,13 @@ async def authorize_endpoint(request: Request):
     expected_id = os.environ.get("MCP_CLIENT_ID", "ebay-mcp")
     if client_id != expected_id:
         return JSONResponse({"error": "invalid_client"}, status_code=400)
+
+    expected_passphrase = os.environ.get("MCP_AUTH_PASSPHRASE", "")
+    if expected_passphrase:
+        if request.method == "GET":
+            return _authorize_page(params)
+        if not secrets.compare_digest(passphrase, expected_passphrase):
+            return _authorize_page(params, error="Incorrect passphrase.")
 
     code = secrets.token_urlsafe(32)
     _auth_codes[code] = {
@@ -123,21 +167,7 @@ async def authorize_endpoint(request: Request):
 
     sep = "&" if "?" in redirect_uri else "?"
     callback_url = f"{redirect_uri}{sep}code={code}&state={state}"
-    html = f"""<!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"><title>eBay MCP – Authorize</title>
-<style>body{{font-family:sans-serif;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;background:#f5f5f5}}
-.card{{background:#fff;padding:2rem 3rem;border-radius:12px;box-shadow:0 2px 12px rgba(0,0,0,.1);text-align:center}}
-h2{{margin-bottom:.5rem}}p{{color:#666;margin-bottom:1.5rem}}
-a{{display:inline-block;background:#0070f3;color:#fff;padding:.75rem 2rem;border-radius:8px;text-decoration:none;font-weight:600}}
-a:hover{{background:#0051cc}}</style></head>
-<body><div class="card">
-<h2>eBay Auction Search</h2>
-<p>Allow Claude.ai to access your eBay MCP server?</p>
-<a href="{callback_url}">Allow Access</a>
-</div></body></html>"""
-    from starlette.responses import HTMLResponse
-    return HTMLResponse(html)
+    return RedirectResponse(callback_url, status_code=302)
 
 
 async def token_endpoint(request: Request):
@@ -205,7 +235,7 @@ if __name__ == "__main__":
             Route("/.well-known/oauth-authorization-server", oauth_metadata),
             Route("/.well-known/oauth-protected-resource", protected_resource_metadata),
             Route("/.well-known/oauth-protected-resource/mcp", protected_resource_metadata),
-            Route("/authorize", authorize_endpoint),
+            Route("/authorize", authorize_endpoint, methods=["GET", "POST"]),
             Route("/token", token_endpoint, methods=["GET", "POST"]),
             Mount("/", fastmcp_app),
         ],

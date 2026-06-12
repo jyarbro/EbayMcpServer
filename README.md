@@ -29,6 +29,7 @@ Adds a `list_auction` tool to Claude.ai. You can ask things like:
 | `EBAY_CLIENT_SECRET` | Your eBay Client Secret |
 | `MCP_AUTH_TOKEN` | A strong random secret (e.g. output of `openssl rand -hex 24`) |
 | `MCP_CLIENT_ID` | A client identifier string (e.g. `ebay-mcp`) |
+| `MCP_AUTH_PASSPHRASE` | Optional. If set, the authorization page requires this passphrase before granting access |
 
 Railway automatically sets `PORT` and `RAILWAY_PUBLIC_DOMAIN`.
 
