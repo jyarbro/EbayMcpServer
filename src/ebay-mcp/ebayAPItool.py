@@ -91,7 +91,7 @@ def make_ebay_api_request(access_token, query=str, ammount=int):
             else:
                 end_time = "N/A"
 
-            ebay_search_results.append([title, price, currency, end_date, item.get('itemWebUrl', 'N/A')])
+            ebay_search_results.append([title, price, currency, end_date, item.get('itemWebUrl', 'N/A'), item.get('itemId', 'N/A')])
 
         return ebay_search_results
     else:

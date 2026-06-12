@@ -37,9 +37,9 @@ def list_auction(query: str, amount: int = 10) -> str:
     if isinstance(results, str):
         return results
     lines = []
-    for title, price, currency, end_date, url in results:
+    for title, price, currency, end_date, url, item_id in results:
         price_str = f"{currency} {price}" if price else "No bids yet"
-        lines.append(f"- {title}\n  Bid: {price_str} | Ends: {end_date}\n  {url}")
+        lines.append(f"- {title}\n  Bid: {price_str} | Ends: {end_date}\n  Item ID: {item_id}\n  {url}")
     return "\n\n".join(lines) if lines else "No auctions found."
 
 
