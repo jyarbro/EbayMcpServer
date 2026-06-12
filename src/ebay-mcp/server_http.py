@@ -125,17 +125,20 @@ async def token_endpoint(request: Request):
     if grant_type == "authorization_code":
         code = form.get("code", "")
         code_verifier = form.get("code_verifier", "")
-        client_id = form.get("client_id", "")
+
+        logging.info(f"Token exchange: code={code[:8]}... verifier_len={len(code_verifier)} form_keys={list(form.keys())}")
 
         stored = _auth_codes.pop(code, None)
-        if not stored or stored["client_id"] != client_id:
-            return JSONResponse({"error": "invalid_grant"}, status_code=401)
+        if not stored:
+            logging.error(f"Code not found. Known codes: {list(_auth_codes.keys())}")
+            return JSONResponse({"error": "invalid_grant", "detail": "code_not_found"}, status_code=401)
 
         # Validate PKCE S256
         digest = hashlib.sha256(code_verifier.encode()).digest()
         computed = base64.urlsafe_b64encode(digest).rstrip(b"=").decode()
+        logging.info(f"PKCE: computed={computed[:16]}... stored={stored['code_challenge'][:16]}...")
         if computed != stored["code_challenge"]:
-            return JSONResponse({"error": "invalid_grant"}, status_code=401)
+            return JSONResponse({"error": "invalid_grant", "detail": "pkce_mismatch"}, status_code=401)
 
         return JSONResponse({
             "access_token": auth_token,
