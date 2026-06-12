@@ -101,9 +101,19 @@ def make_ebay_api_request(access_token, query=str, ammount=int):
 def get_item_detail(access_token, item_id):
     sandbox = os.environ.get("EBAY_SANDBOX", "false").lower() == "true"
     base = "api.sandbox.ebay.com" if sandbox else "api.ebay.com"
-    url = f"https://{base}/buy/browse/v1/item/{requests.utils.quote(item_id, safe='')}"
     headers = {"Authorization": f"Bearer {access_token}"}
-    response = requests.get(url, headers=headers)
-    if response.status_code == 200:
-        return response.json()
-    return {"error": f"{response.status_code} {response.text}"}
+
+    # Build list of candidate IDs to try: given ID first, then v1|id|0 form if not already
+    candidates = [item_id]
+    if not item_id.startswith("v1|") and item_id.isdigit():
+        candidates.append(f"v1|{item_id}|0")
+
+    last_response = None
+    for candidate in candidates:
+        url = f"https://{base}/buy/browse/v1/item/{requests.utils.quote(candidate, safe='')}"
+        last_response = requests.get(url, headers=headers)
+        print(f"get_item_detail: tried {candidate} -> {last_response.status_code}")
+        if last_response.status_code == 200:
+            return last_response.json()
+
+    return {"error": f"{last_response.status_code} {last_response.text}"}
