@@ -24,8 +24,10 @@ def get_access_token(CLIENT_ID, CLIENT_SECRET):
         "Authorization": f"Basic {encoded_auth}",
     }
 
-    API_SCOPE = "https://api.ebay.com/oauth/api_scope"           # scope aka what it how much of ebay resources it has access
-    OAUTH_URL = "https://api.ebay.com/identity/v1/oauth2/token"  # send post request to this link to get token
+    sandbox = os.environ.get("EBAY_SANDBOX", "false").lower() == "true"
+    base = "api.sandbox.ebay.com" if sandbox else "api.ebay.com"
+    API_SCOPE = "https://api.ebay.com/oauth/api_scope"
+    OAUTH_URL = f"https://{base}/identity/v1/oauth2/token"
 
     data = {
         "grant_type": "client_credentials",
@@ -55,7 +57,9 @@ def make_ebay_api_request(access_token, query=str, ammount=int):
     access_token = access_token
 
     # Define the eBay Browse API endpoint
-    url = "https://api.ebay.com/buy/browse/v1/item_summary/search"
+    sandbox = os.environ.get("EBAY_SANDBOX", "false").lower() == "true"
+    base = "api.sandbox.ebay.com" if sandbox else "api.ebay.com"
+    url = f"https://{base}/buy/browse/v1/item_summary/search"
     headers = {
         "Authorization": f"Bearer {access_token}",
         "Content-Type": "application/json",

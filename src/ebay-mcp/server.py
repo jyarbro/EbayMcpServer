@@ -1,4 +1,5 @@
 import asyncio
+import os
 from mcp.server.models import InitializationOptions
 import mcp.types as types
 from mcp.server import NotificationOptions, Server
@@ -76,8 +77,8 @@ async def handle_call_tool(
         ammount = 1
 
 
-    CLIENT_ID = "Your Ebay Client ID"          # App ID (Client ID)
-    CLIENT_SECRET = "Clint Secret"             # Make a Ebay dev acc to get these
+    CLIENT_ID = os.environ["EBAY_CLIENT_ID"]
+    CLIENT_SECRET = os.environ["EBAY_CLIENT_SECRET"]
     access_token = get_access_token(CLIENT_ID, CLIENT_SECRET)
     search_response = make_ebay_api_request(access_token, query, ammount)
 

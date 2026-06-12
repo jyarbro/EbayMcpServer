@@ -8,3 +8,9 @@ wheels/
 
 # Virtual environments
 .venv
+
+# eBay OAuth token cache
+ebay_token.json
+
+# Secrets
+.env
