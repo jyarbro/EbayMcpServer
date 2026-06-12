@@ -1,12 +1,14 @@
-# Ebay MCP server
+# Ebay MCP Server
 
-Simple Ebay server that lets you fetch auctions from Ebay.com
+Simple eBay server that lets you fetch auctions from eBay.com
 
 Uses the official [MCP Python SDK](https://github.com/modelcontextprotocol/python-sdk) to handle protocol communication and server interactions.
 
+Forked from [CooKey-Monster/EbayMcpServer](https://github.com/CooKey-Monster/EbayMcpServer).
+
 ## Example
 
-Let's you use prompts like, "Find me 10 auctions for batman comics"
+Lets you use prompts like, "Find me 10 auctions for batman comics"
 
 ## Components
 
@@ -14,43 +16,64 @@ Let's you use prompts like, "Find me 10 auctions for batman comics"
 
 The server provides a single tool:
 
-- list_auction: Scan ebay for auctions. This tool is helpful for finding auctions on ebay.
-  - Required "query" argument for the search query
-  - Optional "ammount" argument for ammount of results
-    - defaults to 0
-  - Returns result from Ebay's REST API
+- `list-auction`: Scan eBay for auctions.
+  - Required `query` argument — the search term
+  - Required `ammount` argument — number of results to return
+  - Returns results from eBay's Browse REST API
 
 ## Installation
 
-### Requires [UV](https://github.com/astral-sh/uv) (Fast Python package and project manager)
+### Prerequisites
 
-If uv isn't installed.
+Requires [uv](https://github.com/astral-sh/uv):
 
 ```bash
-# Using Homebrew on macOS
+# macOS (Homebrew)
 brew install uv
-```
 
-or
-
-```bash
-# On macOS and Linux.
+# macOS / Linux
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# On Windows.
+# Windows
 powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
 ```
 
-Next, install the MCP server
+### Clone and set up
 
 ```bash
-# Install from source
-uv pip install git+https://github.com/CooKey-Monster/EbayMcpServer.git
+git clone https://github.com/jyarbro/EbayMcpServer.git
+cd EbayMcpServer
+uv sync
 ```
+
+### Configure Claude
+
+Add the following to your Claude MCP config (e.g. `~/.claude.json`):
+
+```json
+{
+  "mcpServers": {
+    "ebay": {
+      "command": "uv",
+      "args": ["run", "--directory", "/path/to/EbayMcpServer", "python", "src/ebay-mcp/server.py"],
+      "env": {
+        "EBAY_CLIENT_ID": "your-client-id",
+        "EBAY_CLIENT_SECRET": "your-client-secret",
+        "EBAY_SANDBOX": "false"
+      }
+    }
+  }
+}
+```
+
+Replace `/path/to/EbayMcpServer` with the absolute path to where you cloned the repo.
 
 ### Environment Variables
 
-The following environment variable is required; you can find them on the [Ebay developer portal](https://developer.ebay.com/develop)
+Get your credentials from the [eBay Developer Portal](https://developer.ebay.com/develop).
 
-- `CLIENT_ID`: Your Ebay client ID
-- `CLIENT_SECRET`: Your Ebay client secret
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `EBAY_CLIENT_ID` | Yes | Your eBay App ID (Client ID) |
+| `EBAY_CLIENT_SECRET` | Yes | Your eBay Client Secret |
+| `EBAY_SANDBOX` | No | Set to `"true"` to use sandbox endpoints (default: `"false"`) |
