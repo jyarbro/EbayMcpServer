@@ -69,8 +69,18 @@ class BearerAuthMiddleware(BaseHTTPMiddleware):
         return await call_next(request)
 
 
+def public_base_url(request: Request) -> str:
+    domain = os.environ.get("RAILWAY_PUBLIC_DOMAIN")
+    if domain:
+        return f"https://{domain}"
+    # Fallback: honour X-Forwarded-Proto from reverse proxy
+    proto = request.headers.get("x-forwarded-proto", "https")
+    host = request.headers.get("x-forwarded-host", request.headers.get("host", "localhost"))
+    return f"{proto}://{host}"
+
+
 async def oauth_metadata(request: Request):
-    base = str(request.base_url).rstrip("/")
+    base = public_base_url(request)
     return JSONResponse({
         "issuer": base,
         "authorization_endpoint": f"{base}/authorize",
@@ -83,7 +93,7 @@ async def oauth_metadata(request: Request):
 
 
 async def protected_resource_metadata(request: Request):
-    base = str(request.base_url).rstrip("/")
+    base = public_base_url(request)
     return JSONResponse({
         "resource": base,
         "authorization_servers": [base],
@@ -132,7 +142,7 @@ a:hover{{background:#0051cc}}</style></head>
 
 async def token_endpoint(request: Request):
     if request.method == "GET":
-        base = str(request.base_url).rstrip("/")
+        base = public_base_url(request)
         return JSONResponse({"token_endpoint": f"{base}/token", "grant_types_supported": ["authorization_code", "client_credentials"]})
     form = await request.form()
     grant_type = form.get("grant_type", "")
