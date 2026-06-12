@@ -1,11 +1,14 @@
 import os
+import hashlib
+import base64
+import secrets
 import logging
 import uvicorn
 from mcp.server.fastmcp import FastMCP
 from starlette.applications import Starlette
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
-from starlette.responses import JSONResponse
+from starlette.responses import JSONResponse, RedirectResponse
 from starlette.routing import Route, Mount
 from ebayAPItool import get_access_token, make_ebay_api_request
 
@@ -29,26 +32,26 @@ def list_auction(query: str, amount: int = 10) -> str:
     """
     client_id = os.environ["EBAY_CLIENT_ID"]
     client_secret = os.environ["EBAY_CLIENT_SECRET"]
-
     access_token = get_access_token(client_id, client_secret)
     results = make_ebay_api_request(access_token, query, amount)
-
     if isinstance(results, str):
         return results
-
     lines = []
     for title, price, currency, end_date, url in results:
         price_str = f"{currency} {price}" if price else "No bids yet"
         lines.append(f"- {title}\n  Bid: {price_str} | Ends: {end_date}\n  {url}")
-
     return "\n\n".join(lines) if lines else "No auctions found."
 
 
-class BearerAuthMiddleware(BaseHTTPMiddleware):
-    UNPROTECTED = {"/token", "/.well-known/oauth-authorization-server"}
+# In-memory store for pending auth codes: {code: {code_challenge, redirect_uri, client_id}}
+_auth_codes: dict = {}
 
+UNPROTECTED_PATHS = {"/token", "/authorize", "/.well-known/oauth-authorization-server"}
+
+
+class BearerAuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
-        if request.url.path in self.UNPROTECTED:
+        if request.url.path in UNPROTECTED_PATHS:
             return await call_next(request)
         auth_token = os.environ.get("MCP_AUTH_TOKEN", "")
         if not auth_token:
@@ -63,31 +66,81 @@ async def oauth_metadata(request: Request):
     base = str(request.base_url).rstrip("/")
     return JSONResponse({
         "issuer": base,
+        "authorization_endpoint": f"{base}/authorize",
         "token_endpoint": f"{base}/token",
-        "grant_types_supported": ["client_credentials"],
-        "token_endpoint_auth_methods_supported": ["client_secret_post"],
+        "grant_types_supported": ["authorization_code", "client_credentials"],
+        "code_challenge_methods_supported": ["S256"],
+        "token_endpoint_auth_methods_supported": ["client_secret_post", "none"],
+        "response_types_supported": ["code"],
     })
+
+
+async def authorize_endpoint(request: Request):
+    params = dict(request.query_params)
+    client_id = params.get("client_id", "")
+    redirect_uri = params.get("redirect_uri", "")
+    state = params.get("state", "")
+    code_challenge = params.get("code_challenge", "")
+    code_challenge_method = params.get("code_challenge_method", "S256")
+
+    expected_id = os.environ.get("MCP_CLIENT_ID", "ebay-mcp")
+    if client_id != expected_id:
+        return JSONResponse({"error": "invalid_client"}, status_code=400)
+
+    code = secrets.token_urlsafe(32)
+    _auth_codes[code] = {
+        "code_challenge": code_challenge,
+        "code_challenge_method": code_challenge_method,
+        "redirect_uri": redirect_uri,
+        "client_id": client_id,
+    }
+
+    sep = "&" if "?" in redirect_uri else "?"
+    return RedirectResponse(f"{redirect_uri}{sep}code={code}&state={state}", status_code=302)
 
 
 async def token_endpoint(request: Request):
     form = await request.form()
-    grant_type = form.get("grant_type")
-    client_id = form.get("client_id", "")
-    client_secret = form.get("client_secret", "")
+    grant_type = form.get("grant_type", "")
+    auth_token = os.environ.get("MCP_AUTH_TOKEN", "")
 
-    expected_id = os.environ.get("MCP_CLIENT_ID", "ebay-mcp")
-    expected_secret = os.environ.get("MCP_AUTH_TOKEN", "")
-
-    if not expected_secret:
+    if not auth_token:
         return JSONResponse({"error": "server_not_configured"}, status_code=500)
 
-    if grant_type == "client_credentials" and client_id == expected_id and client_secret == expected_secret:
+    if grant_type == "authorization_code":
+        code = form.get("code", "")
+        code_verifier = form.get("code_verifier", "")
+        client_id = form.get("client_id", "")
+
+        stored = _auth_codes.pop(code, None)
+        if not stored or stored["client_id"] != client_id:
+            return JSONResponse({"error": "invalid_grant"}, status_code=401)
+
+        # Validate PKCE S256
+        digest = hashlib.sha256(code_verifier.encode()).digest()
+        computed = base64.urlsafe_b64encode(digest).rstrip(b"=").decode()
+        if computed != stored["code_challenge"]:
+            return JSONResponse({"error": "invalid_grant"}, status_code=401)
+
         return JSONResponse({
-            "access_token": expected_secret,
+            "access_token": auth_token,
             "token_type": "bearer",
             "expires_in": 3600,
         })
-    return JSONResponse({"error": "invalid_client"}, status_code=401)
+
+    if grant_type == "client_credentials":
+        client_id = form.get("client_id", "")
+        client_secret = form.get("client_secret", "")
+        expected_id = os.environ.get("MCP_CLIENT_ID", "ebay-mcp")
+        if client_id == expected_id and client_secret == auth_token:
+            return JSONResponse({
+                "access_token": auth_token,
+                "token_type": "bearer",
+                "expires_in": 3600,
+            })
+        return JSONResponse({"error": "invalid_client"}, status_code=401)
+
+    return JSONResponse({"error": "unsupported_grant_type"}, status_code=400)
 
 
 if __name__ == "__main__":
@@ -95,6 +148,7 @@ if __name__ == "__main__":
 
     app = Starlette(routes=[
         Route("/.well-known/oauth-authorization-server", oauth_metadata),
+        Route("/authorize", authorize_endpoint),
         Route("/token", token_endpoint, methods=["POST"]),
         Mount("/", fastmcp_app),
     ])
