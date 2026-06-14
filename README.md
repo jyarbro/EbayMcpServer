@@ -9,6 +9,7 @@ Forked from [CooKey-Monster/EbayMcpServer](https://github.com/CooKey-Monster/Eba
 Adds two tools to Claude.ai for researching eBay auctions:
 
 > "Find me 10 auctions for vintage cameras"
+
 > "Get the details on that first listing"
 
 ## Deployment (Railway)
@@ -24,13 +25,13 @@ Adds two tools to Claude.ai for researching eBay auctions:
 2. In Railway project settings, set **Build > Builder** to **Dockerfile** with path `Dockerfile.plugin`
 3. Set the following environment variables in Railway:
 
-| Variable | Description |
-|----------|-------------|
-| `EBAY_CLIENT_ID` | Your eBay App ID |
-| `EBAY_CLIENT_SECRET` | Your eBay Client Secret |
-| `MCP_AUTH_TOKEN` | A strong random secret (e.g. output of `openssl rand -hex 24`) |
-| `MCP_CLIENT_ID` | A client identifier string (e.g. `ebay-mcp`) |
-| `MCP_AUTH_PASSPHRASE` | Optional. If set, the authorization page requires this passphrase before granting access |
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `EBAY_CLIENT_ID` | Yes | Your eBay App ID |
+| `EBAY_CLIENT_SECRET` | Yes | Your eBay Client Secret |
+| `MCP_AUTH_TOKEN` | Yes | Bearer token Claude.ai uses to authenticate every request. Use a strong random value (e.g. `openssl rand -hex 24`). |
+| `MCP_CLIENT_ID` | Yes | Client identifier checked during OAuth. Can be any string (e.g. `ebay-mcp`). |
+| `MCP_AUTH_PASSPHRASE` | Recommended | If set, the authorization page shows a password field. Only someone who knows this passphrase can connect a new Claude.ai session. Use ASCII characters only; avoid leading/trailing spaces. |
 
 Railway automatically sets `PORT` and `RAILWAY_PUBLIC_DOMAIN`.
 
@@ -40,7 +41,11 @@ Railway automatically sets `PORT` and `RAILWAY_PUBLIC_DOMAIN`.
 2. Fill in:
    - **MCP Server URL**: `https://<your-railway-domain>/mcp`
    - **Client ID**: the value you set for `MCP_CLIENT_ID`
-3. Click **Connect** and approve access on the authorization page that appears
+3. Click **Connect** — a browser page will open asking you to authorize access
+4. If `MCP_AUTH_PASSPHRASE` is set, enter the passphrase and click **Allow Access**
+5. You'll be redirected back to Claude.ai and the connector will activate
+
+> The passphrase is only required when first connecting (or reconnecting). It is not needed for individual searches.
 
 ## Tools
 
