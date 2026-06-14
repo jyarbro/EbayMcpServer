@@ -1,16 +1,16 @@
 # eBay MCP Server — Claude.ai Connector
 
-Search eBay for live auction listings via a hosted MCP server connected to Claude.ai.
+Search and research eBay listings via a hosted MCP server connected to Claude.ai.
 
 Forked from [CooKey-Monster/EbayMcpServer](https://github.com/CooKey-Monster/EbayMcpServer).
 
 ## What it does
 
-Adds two tools to Claude.ai for researching eBay auctions:
+Adds ten tools to Claude.ai for browsing, researching, and comparing eBay listings:
 
-> "Find me 10 auctions for vintage cameras"
-
-> "Get the details on that first listing"
+> "Find me vintage cameras under $200 — auctions and Buy It Now"
+> "What did that model actually sell for recently?"
+> "Are there any eBay sale events on right now?"
 
 ## Deployment (Railway)
 
@@ -49,9 +49,29 @@ Railway automatically sets `PORT` and `RAILWAY_PUBLIC_DOMAIN`.
 
 ## Tools
 
+### Browse & Search
+
 | Tool | Arguments | Description |
 |------|-----------|-------------|
-| `list_auction` | `query` (string), `amount` (int, default 10) | Search eBay auctions by keyword. Returns title, current bid, end time, item ID, and URL for each result. |
-| `get_auction_detail` | `item_id` (string) | Fetch full details for a single listing using the item ID from `list_auction`. Returns title, condition, current bid, bid count, seller feedback score and positive %, return policy, all shipping options with estimated delivery, item specifics (model, storage, etc.), full description, and all listing photos. |
+| `list_auction` | `query` (string), `amount` (int, default 10) | Search eBay auction-only listings by keyword. Returns title, current bid, end time, item ID, and URL. |
+| `search_ebay` | `query` (string), `amount` (int, default 10), `buying_options` (string, optional), `category_ids` (string, optional) | Search all eBay listing formats. `buying_options` can be `AUCTION`, `FIXED_PRICE`, or `BEST_OFFER` (leave blank for all). `category_ids` accepts a comma-separated list of eBay category IDs. |
+| `get_auction_detail` | `item_id` (string) | Fetch full details for a single listing: title, condition, bid/price, bid count, seller feedback, return policy, shipping options with estimated delivery, item specifics, description, and photos. |
+| `get_items_by_ids` | `item_ids` (string) | Batch-fetch details for up to 20 items in one call. Pass a comma-separated list of item IDs. |
+| `get_item_variants` | `item_group_id` (string) | Get all variants (color, size, storage, etc.) for a multi-variation eBay listing. |
+| `get_item_by_legacy` | `legacy_item_id` (string), `legacy_variation_id` (string, optional) | Look up an item using an old-style numeric eBay item ID. |
+
+### Deals & Sale Events
+
+| Tool | Arguments | Description |
+|------|-----------|-------------|
+| `get_ebay_deals` | `amount` (int, default 10), `category_ids` (string, optional) | Get current eBay daily deal items with prices and discount percentages. |
+| `get_ebay_sale_events` | `amount` (int, default 10) | List active eBay sale events (sitewide and category sales). Returns event IDs, titles, and dates. |
+| `get_sale_event_items` | `event_id` (string), `amount` (int, default 10) | Get items in a specific sale event. Use an event ID from `get_ebay_sale_events`. |
+
+### Price Research
+
+| Tool | Arguments | Description |
+|------|-----------|-------------|
+| `search_sold_listings` | `query` (string), `amount` (int, default 10) | Search historical sold listings to see what items actually sold for (Marketplace Insights API). |
 
 > **Note:** Watcher count is not available — eBay restricts that to seller-authenticated APIs only.
