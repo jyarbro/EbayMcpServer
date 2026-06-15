@@ -261,10 +261,20 @@ def get_item_by_legacy(legacy_item_id: str, legacy_variation_id: str = "") -> st
     ]
     price = data.get("price", {})
     bid = data.get("currentBidPrice", {})
+    price_range = data.get("priceRange", {})
     if bid.get("value"):
         lines.append(f"Current bid: {bid.get('currency', '')} {bid.get('value', '')}")
     elif price.get("value"):
         lines.append(f"Price: {price.get('currency', '')} {price.get('value', '')}")
+    elif price_range.get("minimum", {}).get("value"):
+        min_p = price_range["minimum"]
+        max_p = price_range.get("maximum", {})
+        if max_p.get("value") and max_p["value"] != min_p["value"]:
+            lines.append(f"Price range: {min_p.get('currency', '')} {min_p.get('value', '')} – {max_p.get('value', '')}")
+        else:
+            lines.append(f"Price: {min_p.get('currency', '')} {min_p.get('value', '')}")
+    else:
+        lines.append("Price: Not available")
     lines.append(f"URL: {data.get('itemWebUrl', 'N/A')}")
     return "\n".join(lines)
 
