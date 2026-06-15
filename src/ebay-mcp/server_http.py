@@ -261,20 +261,23 @@ def get_item_by_legacy(legacy_item_id: str, legacy_variation_id: str = "") -> st
     ]
     price = data.get("price", {})
     bid = data.get("currentBidPrice", {})
-    price_range = data.get("priceRange", {})
+    buy_it_now = data.get("buyItNowPrice", {})
     if bid.get("value"):
         lines.append(f"Current bid: {bid.get('currency', '')} {bid.get('value', '')}")
+        if buy_it_now.get("value"):
+            lines.append(f"Buy It Now: {buy_it_now.get('currency', '')} {buy_it_now.get('value', '')}")
     elif price.get("value"):
         lines.append(f"Price: {price.get('currency', '')} {price.get('value', '')}")
-    elif price_range.get("minimum", {}).get("value"):
-        min_p = price_range["minimum"]
-        max_p = price_range.get("maximum", {})
-        if max_p.get("value") and max_p["value"] != min_p["value"]:
-            lines.append(f"Price range: {min_p.get('currency', '')} {min_p.get('value', '')} – {max_p.get('value', '')}")
-        else:
-            lines.append(f"Price: {min_p.get('currency', '')} {min_p.get('value', '')}")
+    elif buy_it_now.get("value"):
+        lines.append(f"Price: {buy_it_now.get('currency', '')} {buy_it_now.get('value', '')}")
     else:
-        lines.append("Price: Not available")
+        price_keys = [k for k in data if "price" in k.lower()]
+        if price_keys:
+            lines.append("Price: Not available in standard fields")
+            for k in price_keys:
+                lines.append(f"  Raw {k}: {data[k]}")
+        else:
+            lines.append("Price: Not returned by eBay API (may require a variation ID for multi-variation listings)")
     lines.append(f"URL: {data.get('itemWebUrl', 'N/A')}")
     return "\n".join(lines)
 
