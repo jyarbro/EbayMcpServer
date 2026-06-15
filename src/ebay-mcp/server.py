@@ -52,12 +52,13 @@ async def handle_list_tools() -> list[types.Tool]:
             },
         ),
         types.Tool(
-            name="get-auction-detail",
-            description="Fetch full details for a single eBay listing by item ID.",
+            name="get-listing-detail",
+            description="Fetch full details for any eBay listing — Buy It Now, auction, or multi-variation. Use this whenever you have an eBay item URL or ID. Extract the numeric ID from the URL (e.g. ebay.com/itm/257566107679 → '257566107679'). Returns price, condition, seller, shipping, returns policy, item specifics, and description.",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "item_id": {"type": "string", "description": "The eBay item ID."},
+                    "item_id": {"type": "string", "description": "The eBay item ID — numeric (e.g. '257566107679') or new-style (e.g. 'v1|257566107679|0')."},
+                    "variation_id": {"type": "string", "description": "Optional variation ID for multi-variation listings (the 'var=' value in the URL)."},
                 },
                 "required": ["item_id"],
             },
@@ -96,18 +97,6 @@ async def handle_list_tools() -> list[types.Tool]:
                     "item_group_id": {"type": "string", "description": "The eBay item group ID."},
                 },
                 "required": ["item_group_id"],
-            },
-        ),
-        types.Tool(
-            name="get-item-by-legacy",
-            description="Fetch an eBay item using a legacy (old-style numeric) item ID.",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "legacy_item_id": {"type": "string", "description": "The numeric legacy eBay item ID."},
-                    "legacy_variation_id": {"type": "string", "description": "Optional legacy variation ID."},
-                },
-                "required": ["legacy_item_id"],
             },
         ),
         types.Tool(
@@ -189,29 +178,40 @@ async def handle_call_tool(
                 lines.append(f"- {title}\n  Bid: {price_str} | Ends: {end_date}\n  Item ID: {item_id}\n  {url}")
             text = "\n\n".join(lines) if lines else "No auctions found."
 
-    elif name == "get-auction-detail":
+    elif name == "get-listing-detail":
         item_id = arguments.get("item_id")
         if not item_id:
             raise ValueError("Missing item_id")
         token = _get_token()
-        data = get_item_detail(token, item_id)
+        variation_id = arguments.get("variation_id") or None
+        if variation_id:
+            data = get_item_by_legacy_id(token, item_id, variation_id)
+        else:
+            data = get_item_detail(token, item_id)
         if "error" in data:
             text = f"Error fetching item: {data['error']}"
         else:
             lines = [
                 f"Title: {data.get('title', 'N/A')}",
-                f"Condition: {data.get('condition', 'N/A')} {data.get('conditionDescription', '')}",
+                f"Condition: {data.get('condition', 'N/A')} {data.get('conditionDescription', '')}".strip(),
             ]
             bid = data.get("currentBidPrice", {})
-            if bid:
-                lines.append(f"Current bid: {bid.get('currency', '')} {bid.get('value', 'N/A')}")
-            bid_count = data.get("bidCount")
-            if bid_count is not None:
-                lines.append(f"Bid count: {bid_count}")
+            price = data.get("price", {})
             buy_now = data.get("buyItNowPrice", {})
-            if buy_now:
-                lines.append(f"Buy It Now: {buy_now.get('currency', '')} {buy_now.get('value', '')}")
-            lines.append(f"Ends: {data.get('itemEndDate', 'N/A')}")
+            if bid.get("value"):
+                lines.append(f"Current bid: {bid.get('currency', '')} {bid.get('value', '')}")
+                bid_count = data.get("bidCount")
+                if bid_count is not None:
+                    lines.append(f"Bid count: {bid_count}")
+                if buy_now.get("value"):
+                    lines.append(f"Buy It Now: {buy_now.get('currency', '')} {buy_now.get('value', '')}")
+            elif price.get("value"):
+                lines.append(f"Price: {price.get('currency', '')} {price.get('value', '')}")
+            elif buy_now.get("value"):
+                lines.append(f"Price: {buy_now.get('currency', '')} {buy_now.get('value', '')}")
+            end_date = data.get("itemEndDate")
+            if end_date:
+                lines.append(f"Ends: {end_date}")
             seller = data.get("seller", {})
             lines.append(f"Seller: {seller.get('username', 'N/A')} — feedback: {seller.get('feedbackScore', 'N/A')} ({seller.get('feedbackPercentage', 'N/A')}% positive)")
             lines.append(f"Location: {data.get('itemLocation', {}).get('city', '')} {data.get('itemLocation', {}).get('country', '')}")
@@ -321,41 +321,6 @@ async def handle_call_tool(
                 price_str = f"{price.get('currency', '')} {price.get('value', '')}" if price.get("value") else ""
                 lines.append(f"  - {item.get('title', 'N/A')} | {aspects} | {price_str}\n    {item.get('itemWebUrl', '')}")
             text = "\n".join(lines) if items else "No variants found."
-
-    elif name == "get-item-by-legacy":
-        legacy_id = arguments.get("legacy_item_id")
-        if not legacy_id:
-            raise ValueError("Missing legacy_item_id")
-        token = _get_token()
-        data = get_item_by_legacy_id(token, legacy_id, arguments.get("legacy_variation_id") or None)
-        if "error" in data:
-            text = f"Error: {data['error']}"
-        else:
-            price = data.get("price", {})
-            bid = data.get("currentBidPrice", {})
-            buy_it_now = data.get("buyItNowPrice", {})
-            if bid.get("value"):
-                price_str = f"Bid: {bid.get('currency', '')} {bid.get('value', '')}"
-                if buy_it_now.get("value"):
-                    price_str += f" | Buy It Now: {buy_it_now.get('currency', '')} {buy_it_now.get('value', '')}"
-            elif price.get("value"):
-                price_str = f"Price: {price.get('currency', '')} {price.get('value', '')}"
-            elif buy_it_now.get("value"):
-                price_str = f"Price: {buy_it_now.get('currency', '')} {buy_it_now.get('value', '')}"
-            else:
-                price_keys = [k for k in data if "price" in k.lower()]
-                if price_keys:
-                    raw = "; ".join(f"{k}={data[k]}" for k in price_keys)
-                    price_str = f"Price: Not available in standard fields (raw: {raw})"
-                else:
-                    price_str = "Price: Not returned by eBay API (may require a variation ID for multi-variation listings)"
-            text = "\n".join([
-                f"Title: {data.get('title', 'N/A')}",
-                f"Item ID: {data.get('itemId', 'N/A')}",
-                f"Condition: {data.get('condition', 'N/A')}",
-                price_str,
-                f"URL: {data.get('itemWebUrl', 'N/A')}",
-            ])
 
     elif name == "get-ebay-deals":
         token = _get_token()

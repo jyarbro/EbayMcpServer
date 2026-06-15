@@ -56,36 +56,49 @@ def list_auction(query: str, amount: int = 10) -> str:
 
 
 @mcp.tool()
-def get_auction_detail(item_id: str) -> str:
-    """Fetch full details for a single eBay listing by item ID.
+def get_listing_detail(item_id: str, variation_id: str = "") -> str:
+    """Fetch full details for any eBay listing — Buy It Now, auction, or multi-variation.
+    Use this whenever you have an eBay item URL or ID. Extract the numeric ID from the URL
+    (e.g. ebay.com/itm/257566107679 → '257566107679'). Returns price, condition, seller,
+    shipping, returns policy, item specifics, and description.
 
     Args:
-        item_id: The eBay item ID (found at the end of the listing URL, e.g. '387234567890').
+        item_id: The eBay item ID — numeric (e.g. '257566107679') or new-style (e.g. 'v1|257566107679|0').
+        variation_id: Optional variation ID for multi-variation listings (the 'var=' value in the URL).
     """
     client_id = os.environ["EBAY_CLIENT_ID"]
     client_secret = os.environ["EBAY_CLIENT_SECRET"]
     access_token = get_access_token(client_id, client_secret)
-    data = get_item_detail(access_token, item_id)
+    if variation_id:
+        data = get_item_by_legacy_id(access_token, item_id, variation_id)
+    else:
+        data = get_item_detail(access_token, item_id)
 
     if "error" in data:
         return f"Error fetching item: {data['error']}"
 
     lines = []
     lines.append(f"Title: {data.get('title', 'N/A')}")
-    lines.append(f"Condition: {data.get('condition', 'N/A')} {data.get('conditionDescription', '')}")
+    lines.append(f"Condition: {data.get('condition', 'N/A')} {data.get('conditionDescription', '')}".strip())
 
     bid = data.get("currentBidPrice", {})
-    if bid:
-        lines.append(f"Current bid: {bid.get('currency', '')} {bid.get('value', 'N/A')}")
-    bid_count = data.get("bidCount")
-    if bid_count is not None:
-        lines.append(f"Bid count: {bid_count}")
-
+    price = data.get("price", {})
     buy_now = data.get("buyItNowPrice", {})
-    if buy_now:
-        lines.append(f"Buy It Now: {buy_now.get('currency', '')} {buy_now.get('value', '')}")
+    if bid.get("value"):
+        lines.append(f"Current bid: {bid.get('currency', '')} {bid.get('value', '')}")
+        bid_count = data.get("bidCount")
+        if bid_count is not None:
+            lines.append(f"Bid count: {bid_count}")
+        if buy_now.get("value"):
+            lines.append(f"Buy It Now: {buy_now.get('currency', '')} {buy_now.get('value', '')}")
+    elif price.get("value"):
+        lines.append(f"Price: {price.get('currency', '')} {price.get('value', '')}")
+    elif buy_now.get("value"):
+        lines.append(f"Price: {buy_now.get('currency', '')} {buy_now.get('value', '')}")
 
-    lines.append(f"Ends: {data.get('itemEndDate', 'N/A')}")
+    end_date = data.get("itemEndDate")
+    if end_date:
+        lines.append(f"Ends: {end_date}")
 
     seller = data.get("seller", {})
     feedback_score = seller.get("feedbackScore", "N/A")
@@ -237,48 +250,6 @@ def get_item_variants(item_group_id: str) -> str:
         price = item.get("price", {})
         price_str = f"{price.get('currency', '')} {price.get('value', '')}" if price.get("value") else ""
         lines.append(f"  - {item.get('title', 'N/A')} | {aspects} | {price_str}\n    {item.get('itemWebUrl', '')}")
-    return "\n".join(lines)
-
-
-@mcp.tool()
-def get_item_by_legacy(legacy_item_id: str, legacy_variation_id: str = "") -> str:
-    """Fetch an eBay item using a legacy (old-style numeric) item ID.
-
-    Args:
-        legacy_item_id: The numeric legacy eBay item ID (e.g. '387234567890').
-        legacy_variation_id: Optional legacy variation ID for multi-variation listings.
-    """
-    client_id = os.environ["EBAY_CLIENT_ID"]
-    client_secret = os.environ["EBAY_CLIENT_SECRET"]
-    access_token = get_access_token(client_id, client_secret)
-    data = get_item_by_legacy_id(access_token, legacy_item_id, legacy_variation_id or None)
-    if "error" in data:
-        return f"Error: {data['error']}"
-    lines = [
-        f"Title: {data.get('title', 'N/A')}",
-        f"Item ID: {data.get('itemId', 'N/A')}",
-        f"Condition: {data.get('condition', 'N/A')}",
-    ]
-    price = data.get("price", {})
-    bid = data.get("currentBidPrice", {})
-    buy_it_now = data.get("buyItNowPrice", {})
-    if bid.get("value"):
-        lines.append(f"Current bid: {bid.get('currency', '')} {bid.get('value', '')}")
-        if buy_it_now.get("value"):
-            lines.append(f"Buy It Now: {buy_it_now.get('currency', '')} {buy_it_now.get('value', '')}")
-    elif price.get("value"):
-        lines.append(f"Price: {price.get('currency', '')} {price.get('value', '')}")
-    elif buy_it_now.get("value"):
-        lines.append(f"Price: {buy_it_now.get('currency', '')} {buy_it_now.get('value', '')}")
-    else:
-        price_keys = [k for k in data if "price" in k.lower()]
-        if price_keys:
-            lines.append("Price: Not available in standard fields")
-            for k in price_keys:
-                lines.append(f"  Raw {k}: {data[k]}")
-        else:
-            lines.append("Price: Not returned by eBay API (may require a variation ID for multi-variation listings)")
-    lines.append(f"URL: {data.get('itemWebUrl', 'N/A')}")
     return "\n".join(lines)
 
 
