@@ -333,20 +333,22 @@ async def handle_call_tool(
         else:
             price = data.get("price", {})
             bid = data.get("currentBidPrice", {})
-            price_range = data.get("priceRange", {})
+            buy_it_now = data.get("buyItNowPrice", {})
             if bid.get("value"):
                 price_str = f"Bid: {bid.get('currency', '')} {bid.get('value', '')}"
+                if buy_it_now.get("value"):
+                    price_str += f" | Buy It Now: {buy_it_now.get('currency', '')} {buy_it_now.get('value', '')}"
             elif price.get("value"):
                 price_str = f"Price: {price.get('currency', '')} {price.get('value', '')}"
-            elif price_range.get("minimum", {}).get("value"):
-                min_p = price_range["minimum"]
-                max_p = price_range.get("maximum", {})
-                if max_p.get("value") and max_p["value"] != min_p["value"]:
-                    price_str = f"Price range: {min_p.get('currency', '')} {min_p.get('value', '')} – {max_p.get('value', '')}"
-                else:
-                    price_str = f"Price: {min_p.get('currency', '')} {min_p.get('value', '')}"
+            elif buy_it_now.get("value"):
+                price_str = f"Price: {buy_it_now.get('currency', '')} {buy_it_now.get('value', '')}"
             else:
-                price_str = "Price: Not available"
+                price_keys = [k for k in data if "price" in k.lower()]
+                if price_keys:
+                    raw = "; ".join(f"{k}={data[k]}" for k in price_keys)
+                    price_str = f"Price: Not available in standard fields (raw: {raw})"
+                else:
+                    price_str = "Price: Not returned by eBay API (may require a variation ID for multi-variation listings)"
             text = "\n".join([
                 f"Title: {data.get('title', 'N/A')}",
                 f"Item ID: {data.get('itemId', 'N/A')}",
